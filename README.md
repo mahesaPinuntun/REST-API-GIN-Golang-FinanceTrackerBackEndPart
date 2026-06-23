@@ -1,10 +1,10 @@
-# 💰 Finance Tracker API
+# Finance Tracker API
 
 A RESTful backend API for personal finance tracking built with **Go**, **Gin**, **GORM**, and **PostgreSQL**. Supports user authentication via JWT and full transaction management with an income/expense dashboard.
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 
 | Layer | Technology |
 |---|---|
@@ -18,7 +18,7 @@ A RESTful backend API for personal finance tracking built with **Go**, **Gin**, 
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 finance-tracker/
@@ -45,7 +45,7 @@ finance-tracker/
 
 ---
 
-## ⚙️ Prerequisites
+## Prerequisites
 
 - [Go 1.21+](https://go.dev/dl/)
 - A PostgreSQL database — local or cloud (e.g. [Neon](https://neon.tech))
@@ -53,7 +53,7 @@ finance-tracker/
 
 ---
 
-## 🐘 PostgreSQL Setup
+## PostgreSQL Setup
 
 ### Option A — Local PostgreSQL
 
@@ -83,7 +83,7 @@ postgresql://user:password@ep-xxxx.neon.tech/dbname?sslmode=require
 
 ---
 
-## 🔧 Local Setup
+## Local Setup
 
 ### 1. Clone the repository
 
@@ -128,7 +128,7 @@ Server starts at `http://localhost:8080`
 
 ---
 
-## 🚀 Deployment on Railway
+## Deployment on Railway
 
 [Railway](https://railway.app) is the recommended free hosting platform for Go/Gin projects.
 
@@ -189,7 +189,7 @@ Production: https://your-app.up.railway.app
 
 ---
 
-### 🔓 Public Routes
+### Public Routes
 
 #### `POST /register` — Create a new user
 
@@ -234,7 +234,7 @@ Production: https://your-app.up.railway.app
 
 ---
 
-### 🔐 Protected Routes
+### Protected Routes
 
 All routes below require a JWT token in the `Authorization` header:
 
@@ -326,7 +326,7 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/dashboard" -Method GET -Header
 
 ---
 
-## 🔒 Security Notes
+## Security Notes
 
 - Passwords are hashed with **bcrypt** (cost factor 10) — never stored in plain text
 - JWT tokens expire after **24 hours**
@@ -339,7 +339,7 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/dashboard" -Method GET -Header
 
 ---
 
-## 🐛 Known Limitations
+## Known Limitations
 
 - Transactions are not yet scoped per user — all users see all transactions
 - JWT secret is not yet read from `JWT_SECRET` env var in middleware (hardcoded as `"secret"`)
@@ -347,6 +347,6 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/dashboard" -Method GET -Header
 
 ---
 
-## 📄 License
+## License
 
 MIT
