@@ -57,6 +57,7 @@ func main() {
 	routes.SetupRoutes(r)
 
 	port := os.Getenv("PORT")
+
 	if port == "" {
 		port = "3000"
 	}
