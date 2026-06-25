@@ -5,11 +5,16 @@ import "gorm.io/gorm"
 type User struct {
 	gorm.Model
 
+	// ── existing columns ──────────────────────────
 	Name     string `json:"name"`
 	Email    string `json:"email" gorm:"unique"`
 	Password string `json:"-"`
-	SalaryAmmount  float64 `json:"salaryAmmount"`
-	SalaryCurrency string  `json:"salaryCurrency"`
-	SalaryFrequency string  `json:"salaryFrequency"`
-	isEmailconfirmed bool    `json:"isEmailConfirmed"`
+
+	// ── salary fields (fixed typo + exported bool) ─
+	SalaryAmount    float64 `json:"salaryAmount"`    // was: SalaryAmmount
+	SalaryCurrency  string  `json:"salaryCurrency"  gorm:"default:'USD'"`
+	SalaryFrequency string  `json:"salaryFrequency" gorm:"default:'monthly'"`
+
+	// ── new columns ───────────────────────────────
+	IsEmailConfirmed bool `json:"isEmailConfirmed" gorm:"default:false"` // was: isEmailconfirmed (unexported, gorm ignored it)
 }

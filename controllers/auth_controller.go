@@ -13,15 +13,14 @@ import (
 func Register(c *gin.Context) {
 
 	var req struct {
-		Name     string `json:"name"`
-		Email    string `json:"email" gorm:"unique"`
-		Password string `json:"-"`
-		SalaryAmmount  float64 `json:"salaryAmmount"`
-		SalaryCurrency string  `json:"salaryCurrency"`
-		SalaryFrequency string  `json:"salaryFrequency"`
-		isEmailconfirmed bool    `json:"isEmailConfirmed"`
+		Name             string  `json:"name"`
+		Email            string  `json:"email"`
+		Password         string  `json:"password"`
+		SalaryAmount     float64 `json:"salaryAmount"`
+		SalaryCurrency   string  `json:"salaryCurrency"`
+		SalaryFrequency  string  `json:"salaryFrequency"`
+		IsEmailConfirmed bool    `json:"isEmailConfirmed"`
 	}
-	
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest,
@@ -37,9 +36,13 @@ func Register(c *gin.Context) {
 	}
 
 	user := models.User{
-		Name:     req.Name,
-		Email:    req.Email,
-		Password: hash,
+		Name:             req.Name,
+		Email:            req.Email,
+		Password:         hash,
+		SalaryAmount:     req.SalaryAmount,
+		SalaryCurrency:   req.SalaryCurrency,
+		SalaryFrequency:  req.SalaryFrequency,
+		IsEmailConfirmed: req.IsEmailConfirmed,
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
@@ -53,6 +56,7 @@ func Register(c *gin.Context) {
 			"message": "User created",
 		})
 }
+
 func Login(c *gin.Context) {
 
 	var req struct {
