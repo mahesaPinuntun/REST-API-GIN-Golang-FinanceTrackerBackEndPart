@@ -8,5 +8,7 @@ type User struct {
 	Name     string `json:"name"`
 	Email    string `json:"email" gorm:"unique"`
 	Password string `json:"-"`
-	Salary  float64 `json:"salary"`
+	SalaryAmmount  float64 `json:"salaryAmmount"`
+	SalaryCurrency string  `json:"salaryCurrency"`
+	SalaryFrequency string  `json:"salaryFrequency"`
 }

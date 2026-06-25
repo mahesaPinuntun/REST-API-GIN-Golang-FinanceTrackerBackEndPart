@@ -14,8 +14,12 @@ func Register(c *gin.Context) {
 
 	var req struct {
 		Name     string `json:"name"`
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email    string `json:"email" gorm:"unique"`
+		Password string `json:"-"`
+		SalaryAmmount  float64 `json:"salaryAmmount"`
+		SalaryCurrency string  `json:"salaryCurrency"`
+		SalaryFrequency string  `json:"salaryFrequency"`
+	}
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
