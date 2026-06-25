@@ -19,6 +19,7 @@ func Register(c *gin.Context) {
 		SalaryAmmount  float64 `json:"salaryAmmount"`
 		SalaryCurrency string  `json:"salaryCurrency"`
 		SalaryFrequency string  `json:"salaryFrequency"`
+		isEmailconfirmed bool    `json:"isEmailConfirmed"`
 	}
 	
 
