@@ -21,7 +21,7 @@ func main() {
 
 	config.ConnectDB()
 
-	config.DB.AutoMigrate(
+	config.DB.AutoMigrate( //migrate db structure
 		&models.User{},
 		&models.Transaction{},
 	)
