@@ -16,49 +16,62 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// timeNowPlusHours is a helper used across controllers
+func timeNowPlusHours(h time.Duration) time.Time {
+	return time.Now().Add(h * time.Hour)
+}
+
 // generateToken creates a secure random 32-byte hex token
 func generateToken() (string, error) {
-	bytes := make([]byte, 32)
-	if _, err := rand.Read(bytes); err != nil {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
 		return "", err
 	}
-	return hex.EncodeToString(bytes), nil
+	return hex.EncodeToString(b), nil
 }
 
 // sendConfirmationEmail sends an email via Resend API
 func sendConfirmationEmail(toEmail, toName, token string) error {
-	appURL := os.Getenv("APP_URL") // e.g. https://your-app.vercel.app
+	appURL := os.Getenv("APP_URL")
 	confirmURL := fmt.Sprintf("%s/api/auth/confirm?token=%s", appURL, token)
 
 	payload := map[string]interface{}{
-		"from":    "Finance Tracker <noreply@yourdomain.com>",
+		"from":    "Finance Tracker <onboarding@resend.dev>",
 		"to":      []string{toEmail},
 		"subject": "Confirm your email address",
 		"html": fmt.Sprintf(`
-			<h2>Hi %s,</h2>
-			<p>Thanks for signing up! Please confirm your email address by clicking the button below.</p>
-			<p>This link expires in <strong>24 hours</strong>.</p>
-			<a href="%s" style="
-				display:inline-block;
-				padding:12px 24px;
-				background:#000;
-				color:#fff;
-				text-decoration:none;
-				border-radius:6px;
-				font-weight:bold;
-			">Confirm Email</a>
-			<p>Or copy this link: %s</p>
-			<p>If you did not create an account, you can ignore this email.</p>
+<!DOCTYPE html>
+<html>
+<body style="font-family:-apple-system,sans-serif;background:#f4f4f4;padding:40px 0;">
+  <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;">
+    <h2 style="margin:0 0 8px;">Hi %s 👋</h2>
+    <p style="color:#666;margin:0 0 24px;">
+      Thanks for signing up for Finance Tracker!
+      Please confirm your email address to unlock all features.
+    </p>
+    <a href="%s" style="
+      display:inline-block;padding:12px 28px;
+      background:#000;color:#fff;
+      text-decoration:none;border-radius:8px;
+      font-weight:600;font-size:15px;
+    ">Confirm Email</a>
+    <p style="color:#999;font-size:13px;margin:24px 0 0;">
+      This link expires in <strong>24 hours</strong>.<br>
+      If you didn't create an account, you can safely ignore this email.
+    </p>
+    <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+    <p style="color:#bbb;font-size:12px;margin:0;">
+      Or copy this link: %s
+    </p>
+  </div>
+</body>
+</html>
 		`, toName, confirmURL, confirmURL),
 	}
 
 	body, _ := json.Marshal(payload)
 
-	req, err := http.NewRequest(
-		"POST",
-		"https://api.resend.com/emails",
-		bytes.NewBuffer(body),
-	)
+	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(body))
 	if err != nil {
 		return err
 	}
@@ -66,7 +79,7 @@ func sendConfirmationEmail(toEmail, toName, token string) error {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+os.Getenv("RESEND_API_KEY"))
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -82,7 +95,7 @@ func sendConfirmationEmail(toEmail, toName, token string) error {
 
 // SendConfirmationEmail godoc
 // POST /api/auth/send-confirmation
-// Generates a token and sends confirmation email to logged-in user
+// Resends confirmation email to logged-in user
 func SendConfirmationEmail(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
 
@@ -100,18 +113,16 @@ func SendConfirmationEmail(c *gin.Context) {
 	// Delete any existing unused tokens for this user
 	config.DB.Where("user_id = ?", userID).Delete(&models.EmailToken{})
 
-	// Generate new token
 	token, err := generateToken()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
 	}
 
-	// Save token to DB with 24h expiry
 	emailToken := models.EmailToken{
 		UserID:    userID,
 		Token:     token,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
+		ExpiresAt: timeNowPlusHours(24),
 	}
 
 	if err := config.DB.Create(&emailToken).Error; err != nil {
@@ -119,7 +130,6 @@ func SendConfirmationEmail(c *gin.Context) {
 		return
 	}
 
-	// Send email
 	if err := sendConfirmationEmail(user.Email, user.Name, token); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send email: " + err.Error()})
 		return
@@ -132,7 +142,6 @@ func SendConfirmationEmail(c *gin.Context) {
 
 // ConfirmEmail godoc
 // GET /api/auth/confirm?token=xxx
-// Validates token and sets is_email_confirmed = true
 func ConfirmEmail(c *gin.Context) {
 	token := c.Query("token")
 
@@ -141,21 +150,18 @@ func ConfirmEmail(c *gin.Context) {
 		return
 	}
 
-	// Find token in DB
 	var emailToken models.EmailToken
 	if err := config.DB.Where("token = ?", token).First(&emailToken).Error; err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired token"})
 		return
 	}
 
-	// Check expiry
 	if time.Now().After(emailToken.ExpiresAt) {
 		config.DB.Delete(&emailToken)
 		c.JSON(http.StatusBadRequest, gin.H{"error": "token has expired, please request a new one"})
 		return
 	}
 
-	// Set is_email_confirmed = true on user
 	if err := config.DB.Model(&models.User{}).
 		Where("id = ?", emailToken.UserID).
 		Update("is_email_confirmed", true).Error; err != nil {
@@ -163,10 +169,9 @@ func ConfirmEmail(c *gin.Context) {
 		return
 	}
 
-	// Delete used token
 	config.DB.Delete(&emailToken)
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Email confirmed successfully",
+		"message": "Email confirmed successfully. You now have full access.",
 	})
 }
