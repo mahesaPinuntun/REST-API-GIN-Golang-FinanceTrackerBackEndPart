@@ -9,29 +9,23 @@ import (
 
 func SetupRoutes(r *gin.Engine) {
 
-	r.POST("/register",
-		controllers.Register)
-
-	r.POST("/login",
-		controllers.Login)
+	r.POST("/register", controllers.Register)
+	r.POST("/login", controllers.Login)
 
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 
 	{
-		api.POST(
-			"/transactions",
-			controllers.CreateTransaction,
-		)
+		// Transactions
+		api.POST("/transactions", controllers.CreateTransaction)
+		api.GET("/transactions", controllers.GetTransactions)
 
-		api.GET(
-			"/transactions",
-			controllers.GetTransactions,
-		)
+		// Dashboard
+		api.GET("/dashboard", controllers.Dashboard)
+		api.GET("/dashboard/convert", controllers.GetDashboardInCurrency)
 
-		api.GET(
-			"/dashboard",
-			controllers.Dashboard,
-		)
+		// Currency
+		api.GET("/currency/convert", controllers.ConvertCurrency)
+		api.GET("/currency/supported", controllers.GetSupportedCurrencies)
 	}
 }
