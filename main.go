@@ -24,6 +24,7 @@ func main() {
 	config.DB.AutoMigrate( //migrate db structure
 		&models.User{},
 		&models.Transaction{},
+		&models.EmailToken{},
 	)
 
 	gin.SetMode(gin.ReleaseMode)

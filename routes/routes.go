@@ -11,7 +11,9 @@ func SetupRoutes(r *gin.Engine) {
 
 	r.POST("/register", controllers.Register)
 	r.POST("/login", controllers.Login)
-
+	
+	// Email confirmation — public (token is the auth)
+	r.GET("/api/auth/confirm", controllers.ConfirmEmail)
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 
