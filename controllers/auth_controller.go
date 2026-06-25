@@ -20,7 +20,7 @@ func Register(c *gin.Context) {
 		SalaryCurrency string  `json:"salaryCurrency"`
 		SalaryFrequency string  `json:"salaryFrequency"`
 	}
-	}
+	
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest,
