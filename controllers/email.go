@@ -1,10 +1,12 @@
 package controllers
 
 import (
+	"bytes"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"net/smtp"
+	"net/http"
 	"os"
 	"time"
 
@@ -12,7 +14,6 @@ import (
 	"finance-tracker/models"
 
 	"github.com/gin-gonic/gin"
-	"net/http"
 )
 
 // timeNowPlusHours is a helper used across controllers
@@ -29,21 +30,24 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// sendConfirmationEmail sends an email via Brevo SMTP
+// sendConfirmationEmail sends an email via Brevo HTTP API
 func sendConfirmationEmail(toEmail, toName, token string) error {
 	appURL := os.Getenv("APP_URL")
 	confirmURL := fmt.Sprintf("%s/api/auth/confirm?token=%s", appURL, token)
 
-	smtpHost := "smtp-relay.brevo.com"
-	smtpPort := "587"
-	smtpLogin := os.Getenv("BREVO_LOGIN")
-	smtpPassword := os.Getenv("BREVO_PASSWORD")
-
-	from := "Finance Tracker <" + smtpLogin + ">"
-	to := []string{toEmail}
-
-	subject := "Confirm your email address"
-	body := fmt.Sprintf(`<!DOCTYPE html>
+	payload := map[string]interface{}{
+		"sender": map[string]string{
+			"name":  "Finance Tracker",
+			"email": os.Getenv("BREVO_FROM"), // your verified sender email
+		},
+		"to": []map[string]string{
+			{
+				"email": toEmail,
+				"name":  toName,
+			},
+		},
+		"subject": "Confirm your email address",
+		"htmlContent": fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <body style="font-family:-apple-system,sans-serif;background:#f4f4f4;padding:40px 0;">
   <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;">
@@ -68,25 +72,35 @@ func sendConfirmationEmail(toEmail, toName, token string) error {
     </p>
   </div>
 </body>
-</html>`, toName, confirmURL, confirmURL)
+</html>`, toName, confirmURL, confirmURL),
+	}
 
-	// Build raw email message with HTML content type
-	message := fmt.Sprintf(
-		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
-		from, toEmail, subject, body,
-	)
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
 
-	auth := smtp.PlainAuth("", smtpLogin, smtpPassword, smtpHost)
+	req, err := http.NewRequest("POST", "https://api.brevo.com/v3/smtp/email", bytes.NewBuffer(body))
+	if err != nil {
+		return err
+	}
 
-	err := smtp.SendMail(
-		smtpHost+":"+smtpPort,
-		auth,
-		smtpLogin,
-		to,
-		[]byte(message),
-	)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("accept", "application/json")
+	req.Header.Set("api-key", os.Getenv("BREVO_API_KEY"))
 
-	return err
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("brevo API error: status %d", resp.StatusCode)
+	}
+
+	return nil
 }
 
 // SendConfirmationEmail godoc
