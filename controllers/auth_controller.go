@@ -41,7 +41,7 @@ func Register(c *gin.Context) {
 		SalaryAmount:     req.SalaryAmount,
 		SalaryCurrency:   req.SalaryCurrency,
 		SalaryFrequency:  req.SalaryFrequency,
-		IsEmailConfirmed: false, // always starts unconfirmed
+		IsEmailConfirmed: false,
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
@@ -54,7 +54,7 @@ func Register(c *gin.Context) {
 	token, err := generateToken()
 	if err == nil {
 		emailToken := models.EmailToken{
-			UserID:    user.ID,
+			UserEmail: user.Email,
 			Token:     token,
 			ExpiresAt: timeNowPlusHours(24),
 		}
@@ -64,7 +64,7 @@ func Register(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":          "User created. Please check your email to confirm your account.",
+		"message":            "User created. Please check your email to confirm your account.",
 		"is_email_confirmed": false,
 	})
 }
@@ -103,7 +103,6 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	// Soft approach — always allow login, but tell frontend the status
 	response := gin.H{
 		"token":              token,
 		"is_email_confirmed": user.IsEmailConfirmed,
@@ -114,7 +113,6 @@ func Login(c *gin.Context) {
 		},
 	}
 
-	// Add a warning if email not confirmed
 	if !user.IsEmailConfirmed {
 		response["warning"] = "Your email is not confirmed. Some features may be restricted."
 	}

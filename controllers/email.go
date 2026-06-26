@@ -111,7 +111,7 @@ func SendConfirmationEmail(c *gin.Context) {
 	}
 
 	// Delete any existing unused tokens for this user
-	config.DB.Where("user_id = ?", userID).Delete(&models.EmailToken{})
+	config.DB.Where("user_email = ?", user.Email).Delete(&models.EmailToken{})
 
 	token, err := generateToken()
 	if err != nil {
@@ -120,7 +120,7 @@ func SendConfirmationEmail(c *gin.Context) {
 	}
 
 	emailToken := models.EmailToken{
-		UserID:    userID,
+		UserEmail: user.Email,
 		Token:     token,
 		ExpiresAt: timeNowPlusHours(24),
 	}
@@ -162,8 +162,9 @@ func ConfirmEmail(c *gin.Context) {
 		return
 	}
 
+	// Update using email instead of ID
 	if err := config.DB.Model(&models.User{}).
-		Where("id = ?", emailToken.UserID).
+		Where("email = ?", emailToken.UserEmail).
 		Update("is_email_confirmed", true).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to confirm email"})
 		return

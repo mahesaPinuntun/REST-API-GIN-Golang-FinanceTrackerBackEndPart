@@ -1,6 +1,6 @@
 # Finance Tracker API
 
-A RESTful backend API for personal finance tracking built with **Go**, **Gin**, **GORM**, and **PostgreSQL**. Supports user authentication via JWT and full transaction management with an income/expense dashboard.
+A RESTful backend API for personal finance tracking built with Go, Gin, GORM, and PostgreSQL. Supports JWT authentication, multi-currency conversion, email confirmation, and full transaction management.
 
 ---
 
@@ -8,13 +8,16 @@ A RESTful backend API for personal finance tracking built with **Go**, **Gin**, 
 
 | Layer | Technology |
 |---|---|
-| Language | Go 1.26+ |
-| Framework | Gin v1.12 |
-| ORM | GORM v1.31 |
-| Database | PostgreSQL (Neon / local) |
-| Auth | JWT (golang-jwt/jwt v5) |
-| Password | bcrypt |
-| Config | godotenv |
+| Language | `Go 1.26+` |
+| Framework | `Gin v1.12` |
+| ORM | `GORM v1.31` |
+| Database | `PostgreSQL` via `Neon` |
+| Auth | `JWT` — `golang-jwt/jwt v5` |
+| Password | `bcrypt` |
+| Email | `Resend API` |
+| Currency | `fxapi.app` |
+| Config | `godotenv` |
+| Hosting | `Vercel` |
 
 ---
 
@@ -23,21 +26,26 @@ A RESTful backend API for personal finance tracking built with **Go**, **Gin**, 
 ```
 finance-tracker/
 ├── config/
-│   └── database.go          # PostgreSQL connection
+│   └── database.go
 ├── controllers/
-│   ├── auth_controller.go   # Register & Login
-│   └── transaction_controller.go  # Transaction CRUD & Dashboard
+│   ├── auth_controller.go        # Register & Login
+│   ├── transaction_controller.go # Transaction CRUD & Dashboard
+│   ├── currency_controller.go    # Currency conversion via fxapi.app
+│   └── email.go                  # Email confirmation via Resend
 ├── middleware/
-│   └── jwt.go               # JWT auth middleware
+│   └── jwt.go                    # JWT auth middleware
 ├── models/
-│   ├── user.go              # User model
-│   └── transaction.go       # Transaction model
+│   ├── user.go                   # User model
+│   ├── transaction.go            # Transaction model with activity types
+│   └── email_token.go            # Email confirmation token model
 ├── routes/
-│   └── routes.go            # Route definitions
+│   └── routes.go
 ├── utils/
-│   ├── hash.go              # bcrypt helpers
-│   └── jwt.go               # Token generation
-├── .env                     # Environment variables (never commit this)
+│   ├── hash.go                   # bcrypt helpers
+│   └── jwt.go                    # Token generation
+├── public/
+│   └── index.html                # Landing page
+├── .env                          # Never commit this
 ├── go.mod
 ├── go.sum
 └── main.go
@@ -47,9 +55,10 @@ finance-tracker/
 
 ## Prerequisites
 
-- [Go 1.21+](https://go.dev/dl/)
-- A PostgreSQL database — local or cloud (e.g. [Neon](https://neon.tech))
-- Git
+- `Go 1.21+` — [go.dev/dl](https://go.dev/dl/)
+- `PostgreSQL` database — local or cloud via `Neon`
+- `Resend` account for email — [resend.com](https://resend.com)
+- `Git`
 
 ---
 
@@ -57,29 +66,25 @@ finance-tracker/
 
 ### Option A — Local PostgreSQL
 
-1. Install PostgreSQL from [postgresql.org](https://www.postgresql.org/download/)
+1. Install from [postgresql.org](https://www.postgresql.org/download/)
 2. Create a database:
 
 ```sql
 CREATE DATABASE finance_tracker;
 ```
 
-3. Note your credentials: host, user, password, port (default `5432`).
+`GORM` auto-migrates all tables on first run — no SQL scripts needed.
 
-> GORM auto-migrates the `users` and `transactions` tables on first run — no SQL scripts needed.
-
-### Option B — Neon (Free Cloud PostgreSQL)
+### Option B — Neon (Recommended)
 
 1. Sign up at [neon.tech](https://neon.tech)
 2. Create a new project and database
-3. Go to **Dashboard → Connection Details**
-4. Copy the connection string — it looks like:
+3. Go to Dashboard → Connection Details
+4. Copy the connection string:
 
 ```
 postgresql://user:password@ep-xxxx.neon.tech/dbname?sslmode=require
 ```
-
-5. Split it into individual env vars for your `.env` file (see below)
 
 ---
 
@@ -100,23 +105,12 @@ go mod tidy
 
 ### 3. Create your `.env` file
 
-Create a file named `.env` in the project root:
-
 ```env
-# Database
-DB_HOST=localhost
-DB_USER=postgres
-DB_PASS=your_password
-DB_NAME=finance_tracker
-DB_PORT=5432
-
-# JWT
+DATABASE_URL=postgresql://user:password@host/dbname?sslmode=require
 JWT_SECRET=your_secret_key_here
+RESEND_API_KEY=re_xxxxxxxxxxxx
+APP_URL=http://localhost:3000
 ```
-
-> **Neon users:** parse your connection string into individual fields.
-> For `ep-floral-glitter-xxx-pooler.c-9.us-east-1.aws.neon.tech`, set `DB_HOST` to that hostname, `DB_USER`/`DB_PASS`/`DB_NAME` from the URL, and `DB_PORT=5432`.
-> Also add `DB_SSLMODE=require` and update `database.go` accordingly if using Neon.
 
 ### 4. Run the server
 
@@ -124,67 +118,48 @@ JWT_SECRET=your_secret_key_here
 go run main.go
 ```
 
-Server starts at `http://localhost:8080`
+Server starts at `http://localhost:3000`
 
 ---
 
-## Deployment on Railway
+## Deployment on Vercel
 
-[Railway](https://railway.app) is the recommended free hosting platform for Go/Gin projects.
+This project uses the official `Gin` + `Vercel` template with embedded static files.
 
-### 1. Prepare your code
+### 1. Push to GitHub
 
-Make sure `main.go` reads the port dynamically (required by Railway):
+Make sure your repo is up to date.
 
-```go
-port := os.Getenv("PORT")
-if port == "" {
-    port = "8080"
-}
-r.Run(":" + port)
-```
+### 2. Import on Vercel
 
-Also make `.env` loading optional (Railway uses real env vars, not a file):
-
-```go
-godotenv.Load(".env") // no log.Fatal — .env is optional in production
-```
-
-### 2. Deploy
-
-1. Push your code to GitHub
-2. Go to [railway.app](https://railway.app) → **New Project** → **Deploy from GitHub**
-3. Select your repository
-4. Railway auto-detects Go from `go.mod` and builds it
+1. Go to [vercel.com](https://vercel.com) → New Project → Import from GitHub
+2. Select your repository
+3. Vercel auto-detects `Go` from `go.mod`
 
 ### 3. Set environment variables
 
-In Railway dashboard → your service → **Variables**, add:
+In Vercel dashboard → Settings → Environment Variables:
 
 ```
-DB_HOST        = your_neon_host
-DB_USER        = your_neon_user
-DB_PASS        = your_neon_password
-DB_NAME        = your_neon_dbname
-DB_PORT        = 5432
-JWT_SECRET     = your_secret_key
+DATABASE_URL     = postgresql://user:password@host/dbname?sslmode=require
+JWT_SECRET       = your_secret_key_here
+RESEND_API_KEY   = re_xxxxxxxxxxxx
+APP_URL          = https://your-app.vercel.app
 ```
 
-Railway automatically injects `PORT` — no need to set that one yourself.
+### 4. Deploy
 
-### 4. Done
-
-Railway provides a public URL like `https://your-app.up.railway.app`.
+Push to `main` branch — Vercel redeploys automatically.
 
 ---
 
-## 📡 API Reference
+## API Reference
 
 ### Base URL
 
 ```
-Local:      http://localhost:8080
-Production: https://your-app.up.railway.app
+Local:      http://localhost:3000
+Production: https://your-app.vercel.app
 ```
 
 ---
@@ -198,16 +173,22 @@ Production: https://your-app.up.railway.app
 {
   "name": "John Doe",
   "email": "john@example.com",
-  "password": "yourpassword"
+  "password": "yourpassword",
+  "salaryAmount": 5000000,
+  "salaryCurrency": "IDR",
+  "salaryFrequency": "monthly"
 }
 ```
 
 **Response `201`:**
 ```json
 {
-  "message": "User created"
+  "message": "User created. Please check your email to confirm your account.",
+  "is_email_confirmed": false
 }
 ```
+
+A confirmation email is sent automatically via `Resend` on successful registration.
 
 ---
 
@@ -224,22 +205,55 @@ Production: https://your-app.up.railway.app
 **Response `200`:**
 ```json
 {
-  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "is_email_confirmed": false,
+  "warning": "Your email is not confirmed. Some features may be restricted.",
+  "user": {
+    "id": 1,
+    "name": "John Doe",
+    "email": "john@example.com"
+  }
 }
 ```
 
 **Error responses:**
-- `401 User not found` — email doesn't exist
-- `401 Invalid credential` — wrong password
+- `401` — User not found
+- `401` — Invalid credential
+
+---
+
+#### `GET /api/auth/confirm?token=xxx` — Confirm email address
+
+Called automatically when the user clicks the link in their confirmation email.
+
+**Response `200`:**
+```json
+{
+  "message": "Email confirmed successfully. You now have full access."
+}
+```
 
 ---
 
 ### Protected Routes
 
-All routes below require a JWT token in the `Authorization` header:
+All routes below require a `JWT` token in the `Authorization` header:
 
 ```
 Authorization: Bearer <your_token>
+```
+
+---
+
+#### `POST /api/auth/send-confirmation` — Resend confirmation email
+
+Resends the confirmation email to the currently logged-in user.
+
+**Response `200`:**
+```json
+{
+  "message": "Confirmation email sent to john@example.com"
+}
 ```
 
 ---
@@ -249,22 +263,25 @@ Authorization: Bearer <your_token>
 **Request Body:**
 ```json
 {
-  "user_id": 1,
   "title": "Freelance Payment",
   "amount": 500000,
   "type": "income",
   "category": "Freelance",
-  "description": "Website project payment"
+  "description": "Website project payment",
+  "currency": "IDR",
+  "status": "POSTED"
 }
 ```
 
-> `type` must be either `"income"` or `"expense"`
+Supported `type` values: `BUY`, `SELL`, `DEPOSIT`, `WITHDRAWAL`, `TRANSFER_IN`, `TRANSFER_OUT`, `DIVIDEND`, `INTEREST`, `CREDIT`, `FEE`, `TAX`, `ADJUSTMENT`, `SPLIT`, `UNKNOWN`
+
+Supported `status` values: `POSTED`, `PENDING`, `DRAFT`, `VOID`
 
 **Response `201`:** Returns the created transaction object.
 
 ---
 
-#### `GET /api/transactions` — Get all transactions
+#### `GET /api/transactions` — Get all transactions for logged-in user
 
 **Response `200`:**
 ```json
@@ -277,15 +294,16 @@ Authorization: Bearer <your_token>
     "type": "income",
     "category": "Freelance",
     "description": "Website project payment",
-    "created_at": "2026-06-20T18:37:54Z",
-    "updated_at": "2026-06-20T18:37:54Z"
+    "currency": "IDR",
+    "status": "POSTED",
+    "created_at": "2026-06-20T18:37:54Z"
   }
 ]
 ```
 
 ---
 
-#### `GET /api/dashboard` — Get income/expense summary
+#### `GET /api/dashboard` — Income/expense summary
 
 **Response `200`:**
 ```json
@@ -298,55 +316,140 @@ Authorization: Bearer <your_token>
 
 ---
 
-### PowerShell Examples (Windows)
+#### `GET /api/dashboard/convert?currency=USD` — Dashboard in any currency
+
+Converts all transactions and salary to the requested currency using live rates from `fxapi.app`.
+
+**Response `200`:**
+```json
+{
+  "currency": "USD",
+  "income": 93.75,
+  "expense": 18.75,
+  "balance": 75.00,
+  "salary_amount": 312.50,
+  "salary_frequency": "monthly",
+  "salary_currency": "IDR"
+}
+```
+
+---
+
+#### `GET /api/currency/convert?from=IDR&to=USD&amount=500000` — Convert a specific amount
+
+Uses live exchange rates from `fxapi.app`. No API key required.
+
+**Response `200`:**
+```json
+{
+  "from": "IDR",
+  "to": "USD",
+  "rate": 0.0000625,
+  "amount": 500000,
+  "converted": 31.25
+}
+```
+
+---
+
+#### `GET /api/currency/supported` — List all supported currencies
+
+Returns all 170+ currencies supported by `fxapi.app`.
+
+---
+
+## PowerShell Examples (Windows)
 
 **Register:**
 ```powershell
-$body = @{ name="John"; email="john@example.com"; password="pass123" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/register" -Method POST -ContentType "application/json" -Body $body
+$body = @{
+    name="John Doe"; email="john@example.com"; password="pass123"
+    salaryAmount=5000000; salaryCurrency="IDR"; salaryFrequency="monthly"
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:3000/register" -Method POST -ContentType "application/json" -Body $body
 ```
 
 **Login and save token:**
 ```powershell
 $body = @{ email="john@example.com"; password="pass123" } | ConvertTo-Json
-$response = Invoke-RestMethod -Uri "http://localhost:8080/login" -Method POST -ContentType "application/json" -Body $body
+$response = Invoke-RestMethod -Uri "http://localhost:3000/login" -Method POST -ContentType "application/json" -Body $body
 $token = $response.token
 ```
 
 **Create transaction:**
 ```powershell
-$body = @{ user_id=1; title="Salary"; amount=5000000; type="income"; category="Work"; description="Monthly salary" } | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/transactions" -Method POST -ContentType "application/json" -Headers @{ Authorization="Bearer $token" } -Body $body
+$body = @{
+    title="Salary"; amount=5000000; type="income"
+    category="Work"; description="Monthly salary"; currency="IDR"; status="POSTED"
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:3000/api/transactions" -Method POST -ContentType "application/json" -Headers @{ Authorization="Bearer $token" } -Body $body
 ```
 
-**Get dashboard:**
+**Dashboard in USD:**
 ```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/dashboard" -Method GET -Headers @{ Authorization="Bearer $token" }
+Invoke-RestMethod -Uri "http://localhost:3000/api/dashboard/convert?currency=USD" -Method GET -Headers @{ Authorization="Bearer $token" }
 ```
+
+**Convert currency:**
+```powershell
+Invoke-RestMethod -Uri "http://localhost:3000/api/currency/convert?from=IDR&to=USD&amount=500000" -Method GET -Headers @{ Authorization="Bearer $token" }
+```
+
+---
+
+## Database Models
+
+### `users`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` | Primary key |
+| `name` | `text` | |
+| `email` | `text` | Unique |
+| `password` | `text` | `bcrypt` hashed, never returned in responses |
+| `salary_amount` | `numeric` | |
+| `salary_currency` | `text` | Default `USD` |
+| `salary_frequency` | `text` | Default `monthly` |
+| `is_email_confirmed` | `boolean` | Default `false` |
+
+### `transactions`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` | Primary key |
+| `user_id` | `bigint` | Foreign key → `users` |
+| `title` | `text` | |
+| `amount` | `numeric` | |
+| `type` | `text` | Activity type |
+| `status` | `text` | Default `POSTED` |
+| `category` | `text` | |
+| `description` | `text` | |
+| `currency` | `text` | Default `USD` |
+| `fee` | `numeric` | Default `0` |
+| `asset` | `text` | For `BUY`/`SELL` activities |
+| `quantity` | `numeric` | For `BUY`/`SELL` activities |
+| `unit_price` | `numeric` | For `BUY`/`SELL` activities |
+| `subtype` | `text` | e.g. `DRIP`, `STAKING_REWARD` |
+| `metadata` | `text` | `JSON` string for extra context |
+
+### `email_tokens`
+| Column | Type | Notes |
+|---|---|---|
+| `id` | `bigint` | Primary key |
+| `user_email` | `text` | References user by email |
+| `token` | `text` | Unique, 32-byte hex |
+| `expires_at` | `timestamptz` | 24 hours from creation |
 
 ---
 
 ## Security Notes
 
-- Passwords are hashed with **bcrypt** (cost factor 10) — never stored in plain text
-- JWT tokens expire after **24 hours**
-- The `password` field is excluded from all JSON responses via `json:"-"`
-- Never commit your `.env` file — add it to `.gitignore`
-
-```gitignore
-.env
-```
-
----
-
-## Known Limitations
-
-- Transactions are not yet scoped per user — all users see all transactions
-- JWT secret is not yet read from `JWT_SECRET` env var in middleware (hardcoded as `"secret"`)
-- No pagination on `GET /api/transactions`
+- Passwords hashed with `bcrypt` (cost factor 10) — never stored in plain text
+- `JWT` tokens expire after 24 hours
+- `password` field excluded from all `JSON` responses via `json:"-"`
+- Email tokens expire after 24 hours and are deleted after use
+- Never commit `.env` — it is listed in `.gitignore`
 
 ---
 
 ## License
 
-MIT
+`MIT`

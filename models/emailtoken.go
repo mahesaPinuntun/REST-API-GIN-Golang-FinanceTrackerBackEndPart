@@ -9,7 +9,7 @@ import (
 type EmailToken struct {
 	gorm.Model
 
-	UserID    uint      `json:"user_id"`
+	UserEmail string    `json:"user_email"`
 	Token     string    `json:"token" gorm:"unique"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
