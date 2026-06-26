@@ -1,12 +1,10 @@
 package controllers
 
 import (
-	"bytes"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
-	"net/http"
+	"net/smtp"
 	"os"
 	"time"
 
@@ -14,6 +12,7 @@ import (
 	"finance-tracker/models"
 
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 // timeNowPlusHours is a helper used across controllers
@@ -30,21 +29,25 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// sendConfirmationEmail sends an email via Resend API
+// sendConfirmationEmail sends an email via Brevo SMTP
 func sendConfirmationEmail(toEmail, toName, token string) error {
 	appURL := os.Getenv("APP_URL")
 	confirmURL := fmt.Sprintf("%s/api/auth/confirm?token=%s", appURL, token)
 
-	payload := map[string]interface{}{
-		"from":    "Finance Tracker <onboarding@resend.dev>",
-		"to":      []string{toEmail},
-		"subject": "Confirm your email address",
-		"html": fmt.Sprintf(`
-<!DOCTYPE html>
+	smtpHost := "smtp-relay.brevo.com"
+	smtpPort := "587"
+	smtpLogin := os.Getenv("BREVO_LOGIN")
+	smtpPassword := os.Getenv("BREVO_PASSWORD")
+
+	from := "Finance Tracker <" + smtpLogin + ">"
+	to := []string{toEmail}
+
+	subject := "Confirm your email address"
+	body := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <body style="font-family:-apple-system,sans-serif;background:#f4f4f4;padding:40px 0;">
   <div style="max-width:480px;margin:0 auto;background:#fff;border-radius:12px;padding:40px;">
-    <h2 style="margin:0 0 8px;">Hi %s 👋</h2>
+    <h2 style="margin:0 0 8px;">Hi %s</h2>
     <p style="color:#666;margin:0 0 24px;">
       Thanks for signing up for Finance Tracker!
       Please confirm your email address to unlock all features.
@@ -65,37 +68,29 @@ func sendConfirmationEmail(toEmail, toName, token string) error {
     </p>
   </div>
 </body>
-</html>
-		`, toName, confirmURL, confirmURL),
-	}
+</html>`, toName, confirmURL, confirmURL)
 
-	body, _ := json.Marshal(payload)
+	// Build raw email message with HTML content type
+	message := fmt.Sprintf(
+		"From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n%s",
+		from, toEmail, subject, body,
+	)
 
-	req, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(body))
-	if err != nil {
-		return err
-	}
+	auth := smtp.PlainAuth("", smtpLogin, smtpPassword, smtpHost)
 
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+os.Getenv("RESEND_API_KEY"))
+	err := smtp.SendMail(
+		smtpHost+":"+smtpPort,
+		auth,
+		smtpLogin,
+		to,
+		[]byte(message),
+	)
 
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode >= 400 {
-		return fmt.Errorf("resend API error: status %d", resp.StatusCode)
-	}
-
-	return nil
+	return err
 }
 
 // SendConfirmationEmail godoc
 // POST /api/auth/send-confirmation
-// Resends confirmation email to logged-in user
 func SendConfirmationEmail(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
 
@@ -110,7 +105,6 @@ func SendConfirmationEmail(c *gin.Context) {
 		return
 	}
 
-	// Delete any existing unused tokens for this user
 	config.DB.Where("user_email = ?", user.Email).Delete(&models.EmailToken{})
 
 	token, err := generateToken()
@@ -162,7 +156,6 @@ func ConfirmEmail(c *gin.Context) {
 		return
 	}
 
-	// Update using email instead of ID
 	if err := config.DB.Model(&models.User{}).
 		Where("email = ?", emailToken.UserEmail).
 		Update("is_email_confirmed", true).Error; err != nil {
