@@ -93,16 +93,6 @@ func GetTransactions(c *gin.Context) {
 		})
 		return
 	}
-	var session models.Sessions
-	if err := config.DB.
-		Where("email = ? AND token = ?", userEmail, userToken).
-		First(&session).Error; err != nil {
-
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Unauthorized",
-		})
-		return
-	}
 	
 	c.JSON(http.StatusOK, transactions)
 }
