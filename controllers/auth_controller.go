@@ -98,7 +98,7 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.GenerateToken(user.ID)
+	token, err := utils.GenerateToken(user.ID, user.Email)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Token error"})
 		return
