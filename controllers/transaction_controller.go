@@ -50,10 +50,6 @@ func CreateTransaction(c *gin.Context) {
 			return
 		}
 	}
-
-	
-
-
 	// Assign ownership
 	trx.UserID = userID
 	trx.UserEmail = userEmail
@@ -97,7 +93,17 @@ func GetTransactions(c *gin.Context) {
 		})
 		return
 	}
+	var session models.Sessions
+	if err := config.DB.
+		Where("email = ? AND token = ?", userEmail, userToken).
+		First(&session).Error; err != nil {
 
+		c.JSON(http.StatusUnauthorized, gin.H{
+			"error": "Unauthorized",
+		})
+		return
+	}
+	
 	c.JSON(http.StatusOK, transactions)
 }
 func Dashboard(c *gin.Context) {
