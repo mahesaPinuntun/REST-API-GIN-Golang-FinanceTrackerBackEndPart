@@ -17,6 +17,8 @@ import (
 var staticFiles embed.FS
 
 func main() {
+
+	//config embedded env variables
 	godotenv.Load(".env") // optional — ignored in production
 
 	config.ConnectDB()
