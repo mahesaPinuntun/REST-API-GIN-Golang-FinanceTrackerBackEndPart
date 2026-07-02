@@ -44,7 +44,7 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		if err != nil || !token.Valid {
 			c.AbortWithStatusJSON(401, gin.H{
-				"error": "Invalid or expired token",
+				"error": "Invalid or expired login token",
 			})
 			return
 		}
@@ -75,18 +75,18 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		userName, ok := claims["userName"].(string)
+		/*userName, ok := claims["userName"].(string)
 		if !ok {
 			c.AbortWithStatusJSON(401, gin.H{
 				"error": "Invalid userName claim",
 			})
 			return
-		}
+		}*/
 
 		// Store into Gin context
 		c.Set("userID", uint(userIDFloat))
 		c.Set("userEmail", userEmail)
-		c.Set("userName", userName)
+		//c.Set("userName", userName)
 		c.Set("userToken",tokenString)
 		c.Next()
 	}

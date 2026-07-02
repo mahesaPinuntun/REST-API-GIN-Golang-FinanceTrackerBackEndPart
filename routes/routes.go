@@ -8,14 +8,19 @@ import (
 )
 
 func SetupRoutes(r *gin.Engine) {
-
-	r.POST("/register", controllers.Register)
-	r.POST("/login", controllers.Login)
+	api.Use(middleware.RateLimit()){
+		
+		r.POST("/register", controllers.Register)
+		r.POST("/login", controllers.Login)
 	
+	}
 	// Email confirmation — public (token is the auth)
 	r.GET("/api/auth/confirm", controllers.ConfirmEmail)
 	api := r.Group("/api")
-	api.Use(middleware.AuthMiddleware())
+	api.Use(
+		middleware.AuthMiddleware()
+		middleware.RateLimit()
+	)
 
 	{
 		// Transactions
