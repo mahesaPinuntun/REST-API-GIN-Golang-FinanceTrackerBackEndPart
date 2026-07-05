@@ -19,6 +19,7 @@ func SetupRoutes(r *gin.Engine) {
 
 		middleware.AuthMiddleware(),
 		middleware.RateLimit(),
+		middleware.MiddleManAPI(),
 	)
 
 	{
