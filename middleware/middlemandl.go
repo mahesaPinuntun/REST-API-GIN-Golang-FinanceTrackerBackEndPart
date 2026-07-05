@@ -104,7 +104,7 @@ func MiddleManAPI() gin.HandlerFunc {
 // =========================
 func sendJsonToMiddleman(scan ScanRequest) (*ScanResponse, error) {
 
-	url := os.Getenv("MIDDLEMAN_URL") + "/scan"
+	url := os.Getenv("middleman_url") + "/scan"
 
 	jsonData, err := json.Marshal(scan)
 	if err != nil {
