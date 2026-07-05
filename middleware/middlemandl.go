@@ -94,7 +94,7 @@ func MiddleManAPI() gin.HandlerFunc {
 
 func sendToScanner(scan ScanRequest) (*ScanResponse, error) {
 
-	url := os.Getenv("MIDDLEMAN_URL")
+	url := os.Getenv("middlemanware_url")
 	if url == "" {
 		return nil, fmt.Errorf("MIDDLEMAN_URL is not configured")
 	}
