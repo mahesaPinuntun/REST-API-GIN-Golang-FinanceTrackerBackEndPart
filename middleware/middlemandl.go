@@ -20,37 +20,40 @@ type ScanRequest struct {
 	Body    string              `json:"body"`
 }
 
-type ScanResponse struct {
+type FlaggedField struct {
+	Path        string  `json:"path"`
+	Value       string  `json:"value"`
 	Probability float64 `json:"probability"`
 	Suspicious  bool    `json:"suspicious"`
 }
 
-// =========================
-// MAIN MIDDLEWARE
-// =========================
+type ScanResponse struct {
+	OverallVerdict   string         `json:"overall_verdict"`
+	FieldsScanned    int            `json:"fields_scanned"`
+	FieldsFlagged    int            `json:"fields_flagged"`
+	HighestRiskScore float64        `json:"highest_risk_score"`
+	FlaggedFields    []FlaggedField `json:"flagged_fields"`
+}
+
 func MiddleManAPI() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
-		// =========================
-		// 1. LIMIT REQUEST SIZE (ANTI-DoS)
-		// =========================
-		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1MB
+		// Limit request body (1 MB)
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20)
 
-		// =========================
-		// 2. READ BODY SAFELY
-		// =========================
-		var bodyBytes []byte
-		if c.Request.Body != nil {
-			bodyBytes, _ = io.ReadAll(c.Request.Body)
+		// Read body
+		bodyBytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{
+				"error": "unable to read request body",
+			})
+			return
 		}
 
-		// restore body for controller
+		// Restore body for controller
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		// =========================
-		// 3. BUILD SCAN PAYLOAD
-		// =========================
-		scanPayload := ScanRequest{
+		scanReq := ScanRequest{
 			IP:      c.ClientIP(),
 			Method:  c.Request.Method,
 			Path:    c.Request.URL.Path,
@@ -58,64 +61,54 @@ func MiddleManAPI() gin.HandlerFunc {
 			Body:    string(bodyBytes),
 		}
 
-		// =========================
-		// 4. CALL AI MIDDLEMAN
-		// =========================
-		result, err := sendJsonToMiddleman(scanPayload)
+		result, err := sendToScanner(scanReq)
 		if err != nil {
-			c.AbortWithStatusJSON(503, gin.H{
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 				"error":   "security scanner unavailable",
 				"blocked": true,
 			})
 			return
 		}
 
-		// =========================
-		// 5. VALIDATE RESPONSE (ANTI-BYPASS)
-		// =========================
 		if result == nil {
-			c.AbortWithStatusJSON(503, gin.H{
-				"error":   "invalid security response",
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
+				"error":   "invalid scanner response",
 				"blocked": true,
 			})
 			return
 		}
 
-		// =========================
-		// 6. BLOCK IF MALICIOUS
-		// =========================
-		if result.Suspicious {
-			c.AbortWithStatusJSON(403, gin.H{
-				"error": "malicious request detected",
-				"risk":  result.Probability,
+		// Block request
+		if result.OverallVerdict == "SUSPICIOUS" {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error":          "malicious request detected",
+				"risk_score":     result.HighestRiskScore,
+				"flagged_fields": result.FlaggedFields,
 			})
 			return
 		}
 
-		// =========================
-		// 7. CONTINUE REQUEST
-		// =========================
 		c.Next()
 	}
 }
 
-// =========================
-// CALL MIDDLEMAN API
-// =========================
-func sendJsonToMiddleman(scan ScanRequest) (*ScanResponse, error) {
+func sendToScanner(scan ScanRequest) (*ScanResponse, error) {
 
-	url := os.Getenv("middelmanware_url") + "/scan"
+	url := os.Getenv("MIDDLEMAN_URL")
+	if url == "" {
+		return nil, fmt.Errorf("MIDDLEMAN_URL is not configured")
+	}
 
-	jsonData, err := json.Marshal(scan)
+	payload, err := json.Marshal(scan)
 	if err != nil {
 		return nil, err
 	}
 
 	client := &http.Client{
-		Timeout: 3 * time.Second, // strict security timeout
+		Timeout: 3 * time.Second,
 	}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	req, err := http.NewRequest(http.MethodPost, url+"/scan", bytes.NewBuffer(payload))
 	if err != nil {
 		return nil, err
 	}
@@ -126,21 +119,26 @@ func sendJsonToMiddleman(scan ScanRequest) (*ScanResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
 
-	// =========================
-	// 1. CHECK HTTP STATUS
-	// =========================
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("middleman error: status %d", resp.StatusCode)
+		return nil, fmt.Errorf("scanner returned %d", resp.StatusCode)
 	}
 
-	// =========================
-	// 2. DECODE RESPONSE SAFELY
-	// =========================
-	var result ScanResponse
-	err = json.NewDecoder(resp.Body).Decode(&result)
+	// Read raw response for debugging
+	raw, err := io.ReadAll(resp.Body)
 	if err != nil {
+		return nil, err
+	}
+
+	fmt.Println("========== SECURITY SCANNER ==========")
+	fmt.Println(string(raw))
+	fmt.Println("======================================")
+
+	var result ScanResponse
+
+	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, err
 	}
 
