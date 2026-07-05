@@ -12,10 +12,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type ScanRequest struct {
-	Body   string `json:"body"`
-}
-
 type FlaggedField struct {
 	Path        string  `json:"path"`
 	Value       string  `json:"value"`
@@ -49,11 +45,16 @@ func MiddleManAPI() gin.HandlerFunc {
 		// Restore body for controller
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		scanReq := ScanRequest{
-			Body:   string(bodyBytes),
+		// Nothing to scan on empty bodies (e.g. GET requests) -- skip straight through
+		if len(bodyBytes) == 0 {
+			c.Next()
+			return
 		}
 
-		result, err := sendToScanner(scanReq)
+		// Send the raw body bytes directly -- no wrapper struct, no
+		// re-encoding. The scanner's /scan endpoint expects the actual
+		// JSON object as-is so it can walk each field individually.
+		result, err := sendToScanner(bodyBytes)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{
 				"error":   "security scanner unavailable",
@@ -84,32 +85,26 @@ func MiddleManAPI() gin.HandlerFunc {
 	}
 }
 
-func sendToScanner(scan ScanRequest) (*ScanResponse, error) {
-
-	url := os.Getenv("middelmanware_url")
+func sendToScanner(body []byte) (*ScanResponse, error) {
+	url := os.Getenv("MIDDLEMANWARE_URL")
 	if url == "" {
-		return nil, fmt.Errorf("MIDDLEMAN_URL is not configured")
-	}
-
-	payload, err := json.Marshal(scan)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("MIDDLEMANWARE_URL is not configured")
 	}
 
 	client := &http.Client{
 		Timeout: 3 * time.Second,
 	}
 
-	req, err := http.NewRequest(http.MethodPost, url+"/scan", bytes.NewBuffer(payload))
+	req, err := http.NewRequest(http.MethodPost, url+"/scan", bytes.NewBuffer(body))
 	if err != nil {
 		return nil, err
 	}
+	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
-
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -127,7 +122,6 @@ func sendToScanner(scan ScanRequest) (*ScanResponse, error) {
 	fmt.Println("======================================")
 
 	var result ScanResponse
-
 	if err := json.Unmarshal(raw, &result); err != nil {
 		return nil, err
 	}
