@@ -3,6 +3,7 @@ package middleware
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -10,17 +11,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 )
-
-type RequestLog struct {
-	IP        string              `json:"ip"`
-	Method    string              `json:"method"`
-	Path      string              `json:"path"`
-	Headers   map[string][]string `json:"headers"`
-	Body      string              `json:"body"`
-	UserID    any                 `json:"user_id"`
-	UserEmail string              `json:"user_email"`
-	Time      time.Time           `json:"time"`
-}
 
 type ScanRequest struct {
 	IP      string              `json:"ip"`
@@ -35,20 +25,30 @@ type ScanResponse struct {
 	Suspicious  bool    `json:"suspicious"`
 }
 
+// =========================
+// MAIN MIDDLEWARE
+// =========================
 func MiddleManAPI() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
 		// =========================
-		// 1. READ BODY SAFELY
+		// 1. LIMIT REQUEST SIZE (ANTI-DoS)
+		// =========================
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 1<<20) // 1MB
+
+		// =========================
+		// 2. READ BODY SAFELY
 		// =========================
 		var bodyBytes []byte
 		if c.Request.Body != nil {
 			bodyBytes, _ = io.ReadAll(c.Request.Body)
 		}
+
+		// restore body for controller
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		// =========================
-		// 2. BUILD SCAN PAYLOAD
+		// 3. BUILD SCAN PAYLOAD
 		// =========================
 		scanPayload := ScanRequest{
 			IP:      c.ClientIP(),
@@ -59,23 +59,30 @@ func MiddleManAPI() gin.HandlerFunc {
 		}
 
 		// =========================
-		// 3. SEND TO MIDDLEMAN API
+		// 4. CALL AI MIDDLEMAN
 		// =========================
 		result, err := sendJsonToMiddleman(scanPayload)
-
-		// =========================
-		// 4. HANDLE TIMEOUT / ERROR (FAIL-CLOSED SECURITY)
-		// =========================
 		if err != nil {
 			c.AbortWithStatusJSON(503, gin.H{
-				"error":   "security scanner failed",
+				"error":   "security scanner unavailable",
 				"blocked": true,
 			})
 			return
 		}
 
 		// =========================
-		// 5. BLOCK IF DANGEROUS
+		// 5. VALIDATE RESPONSE (ANTI-BYPASS)
+		// =========================
+		if result == nil {
+			c.AbortWithStatusJSON(503, gin.H{
+				"error":   "invalid security response",
+				"blocked": true,
+			})
+			return
+		}
+
+		// =========================
+		// 6. BLOCK IF MALICIOUS
 		// =========================
 		if result.Suspicious {
 			c.AbortWithStatusJSON(403, gin.H{
@@ -86,18 +93,18 @@ func MiddleManAPI() gin.HandlerFunc {
 		}
 
 		// =========================
-		// 6. CONTINUE REQUEST
+		// 7. CONTINUE REQUEST
 		// =========================
 		c.Next()
 	}
 }
 
 // =========================
-// HTTP CALL TO FASTAPI
+// CALL MIDDLEMAN API
 // =========================
 func sendJsonToMiddleman(scan ScanRequest) (*ScanResponse, error) {
 
-	url := os.Getenv("middlemanware_url") + "/scan"
+	url := os.Getenv("MIDDLEMAN_URL") + "/scan"
 
 	jsonData, err := json.Marshal(scan)
 	if err != nil {
@@ -105,7 +112,7 @@ func sendJsonToMiddleman(scan ScanRequest) (*ScanResponse, error) {
 	}
 
 	client := &http.Client{
-		Timeout: 5 * time.Second, // 🔥 critical security timeout
+		Timeout: 3 * time.Second, // strict security timeout
 	}
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
@@ -117,12 +124,25 @@ func sendJsonToMiddleman(scan ScanRequest) (*ScanResponse, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err // timeout or network failure
+		return nil, err
 	}
 	defer resp.Body.Close()
 
+	// =========================
+	// 1. CHECK HTTP STATUS
+	// =========================
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("middleman error: status %d", resp.StatusCode)
+	}
+
+	// =========================
+	// 2. DECODE RESPONSE SAFELY
+	// =========================
 	var result ScanResponse
-	json.NewDecoder(resp.Body).Decode(&result)
+	err = json.NewDecoder(resp.Body).Decode(&result)
+	if err != nil {
+		return nil, err
+	}
 
 	return &result, nil
 }
