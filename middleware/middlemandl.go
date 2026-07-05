@@ -13,11 +13,10 @@ import (
 )
 
 type ScanRequest struct {
-	IP      string              `json:"ip"`
-	Method  string              `json:"method"`
-	Path    string              `json:"path"`
-	Headers map[string][]string `json:"headers"`
-	Body    string              `json:"body"`
+	IP     string `json:"ip"`
+	Method string `json:"method"`
+	Path   string `json:"path"`
+	Body   string `json:"body"`
 }
 
 type FlaggedField struct {
@@ -54,11 +53,10 @@ func MiddleManAPI() gin.HandlerFunc {
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		scanReq := ScanRequest{
-			IP:      c.ClientIP(),
-			Method:  c.Request.Method,
-			Path:    c.Request.URL.Path,
-			Headers: c.Request.Header,
-			Body:    string(bodyBytes),
+			IP:     c.ClientIP(),
+			Method: c.Request.Method,
+			Path:   c.Request.URL.Path,
+			Body:   string(bodyBytes),
 		}
 
 		result, err := sendToScanner(scanReq)
@@ -112,8 +110,6 @@ func sendToScanner(scan ScanRequest) (*ScanResponse, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)
 	if err != nil {
