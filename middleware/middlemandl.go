@@ -13,9 +13,6 @@ import (
 )
 
 type ScanRequest struct {
-	IP     string `json:"ip"`
-	Method string `json:"method"`
-	Path   string `json:"path"`
 	Body   string `json:"body"`
 }
 
@@ -53,9 +50,6 @@ func MiddleManAPI() gin.HandlerFunc {
 		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 		scanReq := ScanRequest{
-			IP:     c.ClientIP(),
-			Method: c.Request.Method,
-			Path:   c.Request.URL.Path,
 			Body:   string(bodyBytes),
 		}
 
