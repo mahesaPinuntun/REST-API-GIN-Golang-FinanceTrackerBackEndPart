@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
 )
+
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 
@@ -29,11 +30,9 @@ func AuthMiddleware() gin.HandlerFunc {
 		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
-
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, jwt.ErrTokenSignatureInvalid
 			}
-
 			return []byte(os.Getenv("JWT_SECRET")), nil
 		})
 
@@ -52,25 +51,16 @@ func AuthMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		userIDFloat, ok := claims["userId"].(float64)
+		// Read user_id — matches what utils/jwt.go puts in the token
+		userIDFloat, ok := claims["user_id"].(float64)
 		if !ok {
 			c.AbortWithStatusJSON(401, gin.H{
-				"error": "Invalid userId claim",
-			})
-			return
-		}
-
-		userEmail, ok := claims["userEmail"].(string)
-		if !ok {
-			c.AbortWithStatusJSON(401, gin.H{
-				"error": "Invalid userEmail claim",
+				"error": "Invalid token: missing user_id",
 			})
 			return
 		}
 
 		c.Set("userID", uint(userIDFloat))
-		c.Set("userEmail", userEmail)
-		c.Set("userToken", tokenString)
 
 		c.Next()
 	}
