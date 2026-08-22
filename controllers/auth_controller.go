@@ -76,7 +76,6 @@ func Login(c *gin.Context) {
 		Password string `json:"password"`
 	}
 
-
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
@@ -98,39 +97,25 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	token, err := utils.GenerateToken(user.ID, user.Email)
+	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
 		c.JSON(500, gin.H{"error": "Token error"})
 		return
 	}
 
-	
-/*
-	if !user.IsEmailConfirmed {
-		response["warning"] = "Your email is unverified. open through registered email to click verify button."
-	}*/
-	//note login session in db
-	//UserEmail string    `json:"user_email"`
-	//Token     string    `json:"token" gorm:"unique"`
-	//ExpiresAt time.Time `json:"expires_at"`
-	session := models.Sessions{
-		UserEmail:          req.Email,
-		Token:            token,
-		ExpiresAt:        timeNowPlusHours(240), // Set session expiration to 7 days
-	
-	}
-	config.DB.Create(&session)
-         
-
 	response := gin.H{
 		"token":              token,
 		"is_email_confirmed": user.IsEmailConfirmed,
 		"user": gin.H{
-			"userId":    user.ID,
-			"userName":  user.Name,
-			"userEmail": user.Email,
-			"userToken": token,
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
 		},
-	}   
+	}
+
+	if !user.IsEmailConfirmed {
+		response["warning"] = "Your email is not confirmed. Some features may be restricted."
+	}
+
 	c.JSON(200, response)
 }
