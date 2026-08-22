@@ -14,15 +14,14 @@ func SetupRoutes(r *gin.Engine) {
 
 	// Email confirmation — public (token is the auth)
 	r.GET("/api/auth/confirm", controllers.ConfirmEmail)
-	api := r.Group("/api")
-	api.Use(
 
-		middleware.AuthMiddleware(),
-		middleware.RateLimit(),
-		middleware.MiddleManAPI(),
-	)
+	api := r.Group("/api")
+	api.Use(middleware.AuthMiddleware())
 
 	{
+		// Auth
+		api.POST("/auth/send-confirmation", controllers.SendConfirmationEmail)
+
 		// Transactions
 		api.POST("/transactions", controllers.CreateTransaction)
 		api.GET("/transactions", controllers.GetTransactions)
