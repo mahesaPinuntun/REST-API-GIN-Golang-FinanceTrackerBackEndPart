@@ -22,16 +22,40 @@ func Register(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest,
-			gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate required fields
+	if req.Name == "" || req.Email == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "name, email and password are required"})
+		return
+	}
+
+	if len(req.Password) < 8 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 8 characters"})
+		return
+	}
+
+	// Check if email already exists
+	var existing models.User
+	if err := config.DB.Where("email = ?", req.Email).First(&existing).Error; err == nil {
+		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
 		return
 	}
 
 	hash, err := utils.HashPassword(req.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError,
-			gin.H{"error": "Failed to hash password"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
 		return
+	}
+
+	// Set default currency if not provided
+	if req.SalaryCurrency == "" {
+		req.SalaryCurrency = "IDR"
+	}
+	if req.SalaryFrequency == "" {
+		req.SalaryFrequency = "monthly"
 	}
 
 	user := models.User{
@@ -45,12 +69,11 @@ func Register(c *gin.Context) {
 	}
 
 	if err := config.DB.Create(&user).Error; err != nil {
-		c.JSON(http.StatusInternalServerError,
-			gin.H{"error": err.Error()})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Auto-send confirmation email after registration
+	// Auto-send confirmation email — errors are silent so registration still succeeds
 	token, err := generateToken()
 	if err == nil {
 		emailToken := models.EmailToken{
@@ -59,13 +82,18 @@ func Register(c *gin.Context) {
 			ExpiresAt: timeNowPlusHours(24),
 		}
 		if err := config.DB.Create(&emailToken).Error; err == nil {
-			sendConfirmationEmail(user.Email, user.Name, token)
+			go sendConfirmationEmail(user.Email, user.Name, token) // run in goroutine so it doesn't block response
 		}
 	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message":            "User created. Please check your email to confirm your account.",
 		"is_email_confirmed": false,
+		"user": gin.H{
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
+		},
 	})
 }
 
@@ -77,29 +105,29 @@ func Login(c *gin.Context) {
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"error": err.Error()})
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if req.Email == "" || req.Password == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
 		return
 	}
 
 	var user models.User
-
-	result := config.DB.
-		Where("email = ?", req.Email).
-		First(&user)
-
-	if result.Error != nil {
-		c.JSON(401, gin.H{"error": "User not found"})
+	if err := config.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
 		return
 	}
 
 	if !utils.CheckPasswordHash(req.Password, user.Password) {
-		c.JSON(401, gin.H{"error": "Invalid credential"})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credential"})
 		return
 	}
 
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
-		c.JSON(500, gin.H{"error": "Token error"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
 		return
 	}
 
@@ -107,15 +135,15 @@ func Login(c *gin.Context) {
 		"token":              token,
 		"is_email_confirmed": user.IsEmailConfirmed,
 		"user": gin.H{
-			"id":    user.ID,
-			"name":  user.Name,
-			"email": user.Email,
+			"userId":    user.ID,
+			"userName":  user.Name,
+			"userEmail": user.Email,
 		},
 	}
 
 	if !user.IsEmailConfirmed {
-		response["warning"] = "Your email is not confirmed. Some features may be restricted."
+		response["warning"] = "Your email is not confirmed. Please check your email."
 	}
 
-	c.JSON(200, response)
+	c.JSON(http.StatusOK, response)
 }
