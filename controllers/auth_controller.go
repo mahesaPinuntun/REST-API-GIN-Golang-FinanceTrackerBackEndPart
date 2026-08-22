@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"log"
 	"net/http"
 
 	"finance-tracker/config"
@@ -26,36 +27,10 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// Validate required fields
-	if req.Name == "" || req.Email == "" || req.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "name, email and password are required"})
-		return
-	}
-
-	if len(req.Password) < 8 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "password must be at least 8 characters"})
-		return
-	}
-
-	// Check if email already exists
-	var existing models.User
-	if err := config.DB.Where("email = ?", req.Email).First(&existing).Error; err == nil {
-		c.JSON(http.StatusConflict, gin.H{"error": "email already registered"})
-		return
-	}
-
 	hash, err := utils.HashPassword(req.Password)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to hash password"})
 		return
-	}
-
-	// Set default currency if not provided
-	if req.SalaryCurrency == "" {
-		req.SalaryCurrency = "IDR"
-	}
-	if req.SalaryFrequency == "" {
-		req.SalaryFrequency = "monthly"
 	}
 
 	user := models.User{
@@ -73,28 +48,47 @@ func Register(c *gin.Context) {
 		return
 	}
 
-	// Auto-send confirmation email — errors are silent so registration still succeeds
+	// Generate email confirmation token
+	emailSent := false
+	emailError := ""
+
 	token, err := generateToken()
-	if err == nil {
+	if err != nil {
+		log.Printf("ERROR generateToken: %v", err)
+		emailError = "failed to generate token: " + err.Error()
+	} else {
 		emailToken := models.EmailToken{
 			UserEmail: user.Email,
 			Token:     token,
 			ExpiresAt: timeNowPlusHours(24),
 		}
-		if err := config.DB.Create(&emailToken).Error; err == nil {
-			go sendConfirmationEmail(user.Email, user.Name, token) // run in goroutine so it doesn't block response
+
+		if err := config.DB.Create(&emailToken).Error; err != nil {
+			log.Printf("ERROR saving emailToken: %v", err)
+			emailError = "failed to save token: " + err.Error()
+		} else {
+			if err := sendConfirmationEmail(user.Email, user.Name, token); err != nil {
+				log.Printf("ERROR sendConfirmationEmail: %v", err)
+				emailError = "failed to send email: " + err.Error()
+			} else {
+				emailSent = true
+				log.Printf("INFO confirmation email sent to %s", user.Email)
+			}
 		}
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
+	response := gin.H{
 		"message":            "User created. Please check your email to confirm your account.",
 		"is_email_confirmed": false,
-		"user": gin.H{
-			"id":    user.ID,
-			"name":  user.Name,
-			"email": user.Email,
-		},
-	})
+		"email_sent":         emailSent,
+	}
+
+	// Include error detail so we can debug
+	if emailError != "" {
+		response["email_error"] = emailError
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 func Login(c *gin.Context) {
@@ -109,25 +103,25 @@ func Login(c *gin.Context) {
 		return
 	}
 
-	if req.Email == "" || req.Password == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "email and password are required"})
-		return
-	}
-
 	var user models.User
-	if err := config.DB.Where("email = ?", req.Email).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+
+	result := config.DB.
+		Where("email = ?", req.Email).
+		First(&user)
+
+	if result.Error != nil {
+		c.JSON(401, gin.H{"error": "User not found"})
 		return
 	}
 
 	if !utils.CheckPasswordHash(req.Password, user.Password) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid credential"})
+		c.JSON(401, gin.H{"error": "Invalid credential"})
 		return
 	}
 
 	token, err := utils.GenerateToken(user.ID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		c.JSON(500, gin.H{"error": "Token error"})
 		return
 	}
 
@@ -135,15 +129,15 @@ func Login(c *gin.Context) {
 		"token":              token,
 		"is_email_confirmed": user.IsEmailConfirmed,
 		"user": gin.H{
-			"userId":    user.ID,
-			"userName":  user.Name,
-			"userEmail": user.Email,
+			"id":    user.ID,
+			"name":  user.Name,
+			"email": user.Email,
 		},
 	}
 
 	if !user.IsEmailConfirmed {
-		response["warning"] = "Your email is not confirmed. Please check your email."
+		response["warning"] = "Your email is not confirmed. Some features may be restricted."
 	}
 
-	c.JSON(http.StatusOK, response)
+	c.JSON(200, response)
 }
