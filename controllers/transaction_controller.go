@@ -32,6 +32,7 @@ func CreateTransaction(c *gin.Context) {
 
 func GetTransactions(c *gin.Context) {
 	userID := c.MustGet("userID").(uint)
+	userEmail, _ := c.Get("userEmail") // set by middleware after email_hash verification
 
 	// Pagination params
 	page, err := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -46,16 +47,21 @@ func GetTransactions(c *gin.Context) {
 
 	offset := (page - 1) * limit
 
+	// Build base query — use email if available, fallback to userID
+	baseQuery := config.DB.Model(&models.Transaction{})
+	if email, ok := userEmail.(string); ok && email != "" {
+		baseQuery = baseQuery.Where("user_id = ? AND user_email = ?", userID, email)
+	} else {
+		baseQuery = baseQuery.Where("user_id = ?", userID)
+	}
+
 	// Count total
 	var total int64
-	config.DB.Model(&models.Transaction{}).
-		Where("user_id = ?", userID).
-		Count(&total)
+	baseQuery.Count(&total)
 
 	// Fetch paginated transactions — newest first
 	var transactions []models.Transaction
-	if err := config.DB.
-		Where("user_id = ?", userID).
+	if err := baseQuery.
 		Order("created_at DESC").
 		Limit(limit).
 		Offset(offset).
