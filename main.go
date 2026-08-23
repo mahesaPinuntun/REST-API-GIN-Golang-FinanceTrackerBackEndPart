@@ -25,11 +25,11 @@ func main() {
 
 	//uncomment to auto migrate db structure on startup, but be careful with production data
 
-	config.DB.AutoMigrate(
-    &models.User{},
-    &models.Transaction{},
-    &models.EmailToken{},
-    &models.PendingUpdate{}, 
+	config.DB.AutoMigrate( //migrate db structure
+		&models.User{},
+		&models.Transaction{},
+		&models.EmailToken{},
+		&models.PendingUpdate{},
 	)
 
 	
