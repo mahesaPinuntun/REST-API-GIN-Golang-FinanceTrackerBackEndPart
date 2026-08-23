@@ -12,8 +12,9 @@ func SetupRoutes(r *gin.Engine) {
 	r.POST("/register", controllers.Register)
 	r.POST("/login", controllers.Login)
 
-	// Email confirmation — public
+	// Public — email confirmation links
 	r.GET("/api/auth/confirm", controllers.ConfirmEmail)
+	r.GET("/api/user/confirm-update", controllers.ConfirmUpdateProfile)
 
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
@@ -21,6 +22,11 @@ func SetupRoutes(r *gin.Engine) {
 	{
 		// Auth
 		api.POST("/auth/send-confirmation", controllers.SendConfirmationEmail)
+
+		// User profile
+		api.GET("/user/profile", controllers.GetProfile)
+		api.PUT("/user/profile", controllers.RequestUpdateProfile)
+		api.PUT("/user/change-password", controllers.ChangePassword)
 
 		// Transactions
 		api.POST("/transactions", controllers.CreateTransaction)
