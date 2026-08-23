@@ -1,6 +1,5 @@
 package models
 
-import "gorm.io/gorm"
 import (
 	"time"
  
