@@ -23,16 +23,16 @@ func main() {
 
 	config.ConnectDB()
 
-	/*uncomment to auto migrate db structure on startup, but be careful with production data
+	//uncomment to auto migrate db structure on startup, but be careful with production data
 
-	config.DB.AutoMigrate( //migrate db structure
-		&models.User{},
-		&models.Transaction{},
-		&models.EmailToken{},
-		&models.Sessions{},
+	config.DB.AutoMigrate(
+    &models.User{},
+    &models.Transaction{},
+    &models.EmailToken{},
+    &models.PendingUpdate{}, 
 	)
 
-	*/
+	
 
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
