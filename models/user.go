@@ -2,18 +2,9 @@ package models
 
 import "gorm.io/gorm"
 import (
-	"bytes"
-	"encoding/json"
-	"fmt"
-	"net/http"
-	"os"
 	"time"
  
-	"finance-tracker/config"
-	"finance-tracker/models"
-	"finance-tracker/utils"
- 
-	"github.com/gin-gonic/gin"
+	"gorm.io/gorm"
 )
 type User struct {
 	gorm.Model
