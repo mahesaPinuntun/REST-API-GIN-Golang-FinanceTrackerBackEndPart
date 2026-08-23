@@ -12,7 +12,7 @@ func SetupRoutes(r *gin.Engine) {
 	r.POST("/register", controllers.Register)
 	r.POST("/login", controllers.Login)
 
-	// Email confirmation — public (token is the auth)
+	// Email confirmation — public
 	r.GET("/api/auth/confirm", controllers.ConfirmEmail)
 
 	api := r.Group("/api")
@@ -25,6 +25,9 @@ func SetupRoutes(r *gin.Engine) {
 		// Transactions
 		api.POST("/transactions", controllers.CreateTransaction)
 		api.GET("/transactions", controllers.GetTransactions)
+		api.GET("/transactions/:id", controllers.GetTransaction)
+		api.PUT("/transactions/:id", controllers.UpdateTransaction)
+		api.DELETE("/transactions/:id", controllers.DeleteTransaction)
 
 		// Dashboard
 		api.GET("/dashboard", controllers.Dashboard)
