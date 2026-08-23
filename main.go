@@ -8,7 +8,7 @@ import (
 	"io/fs"
 	"net/http"
 	"os"
-
+	"finance-tracker/models"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )
