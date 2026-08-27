@@ -203,20 +203,20 @@ func DeleteTransaction(c *gin.Context) {
 }
 
 func Dashboard(c *gin.Context) {
-	userID := c.MustGet("userID").(uint)
-
+	//userID := c.MustGet("userID").(uint)
+	userEmail, _ := c.Get("userEmail")
 	var income float64
 	var expense float64
 
 	config.DB.
 		Model(&models.Transaction{}).
-		Where("user_id = ? AND type = ?", userID, "income").
+		Where("user_email = ? AND type = ?", userEmail, "income").
 		Select("COALESCE(SUM(amount),0)").
 		Scan(&income)
 
 	config.DB.
 		Model(&models.Transaction{}).
-		Where("user_id = ? AND type = ?", userID, "expense").
+		Where("user_email = ? AND type = ?", userEmail, "expense").
 		Select("COALESCE(SUM(amount),0)").
 		Scan(&expense)
 
